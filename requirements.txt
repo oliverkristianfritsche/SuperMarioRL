@@ -1,11 +1,3 @@
-time
-import gym
-from pyboy import PyBoy, WindowEvent
-numpy as np
+gym
+pyboy
 torch
-torch.nn as nn
-torch.optim as optim
-numpy as np
-random
-from collections import deque
-import gym
