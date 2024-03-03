@@ -1,2 +1,4 @@
-checkpoints
+checkpoints*
 initial_state.state
+roms
+__pycache__
