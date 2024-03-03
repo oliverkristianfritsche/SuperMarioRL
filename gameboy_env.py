@@ -12,7 +12,7 @@ class GameBoyEnv(gym.Env):
         WindowEvent.PRESS_BUTTON_A, WindowEvent.RELEASE_BUTTON_A,
         WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_RIGHT,
         WindowEvent.PRESS_BUTTON_B, WindowEvent.RELEASE_BUTTON_B,
-        WindowEvent.PRESS_ARROW_LEFT, WindowEvent.RELEASE_ARROW_LEFT,
+        # WindowEvent.PRESS_ARROW_LEFT, WindowEvent.RELEASE_ARROW_LEFT,
     ]
     # WindowEvent.PRESS_BUTTON_A, WindowEvent.RELEASE_BUTTON_A,
     #     WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_RIGHT,
@@ -21,12 +21,12 @@ class GameBoyEnv(gym.Env):
 
     time_steps = 0
     death_scalar=0
-    survive_scalar=100
+    survive_scalar=20
     frame_scalar=0.000
-    level_scalar=0.0
+    level_scalar=3.0
     coin_scalar=1.00
     score_scalar=.01
-    max_steps=4000
+    max_steps=15000
 
     prev_level_reward = 0
     prev_coin_reward = 0
@@ -67,6 +67,9 @@ class GameBoyEnv(gym.Env):
         
         done = self.check_game_over()
         reward, info = self.calculate_reward(observation, done)
+        self.time_steps += 1
+        if self.time_steps > self.max_steps:
+            reward -= 1 * self.survive_scalar
 
         return observation, reward, done, info
 
@@ -132,6 +135,7 @@ class GameBoyEnv(gym.Env):
     def reset(self):
         self.pyboy.load_state(open("roms/initial_state.state", "rb"))
         self.unique_frames = FrameStorage()
+        self.time_steps = 0
         observation = self.pyboy.botsupport_manager().screen().screen_ndarray()
         # Resize observation to the specified shape
         observation = cv2.resize(observation, self.observation_shape, interpolation=cv2.INTER_AREA)

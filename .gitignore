@@ -2,3 +2,4 @@ checkpoints*
 initial_state.state
 roms
 __pycache__
+archive

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from autoencoder import Autoencoder
 from base_module import BaseNNModule
-
+import torch.nn.functional as F
 class EncoderWithHead(Autoencoder):
     def __init__(self, input_shape,output_dims, encoder_layers=None, decoder_layers=None, head_layers_config=None):
         super(EncoderWithHead, self).__init__(input_shape, encoder_layers, decoder_layers)
@@ -51,3 +51,26 @@ class EncoderWithHead(Autoencoder):
             return head_output  # This should be of shape [batch_size, num_actions]
         else:
             raise NotImplementedError("Head not implemented in the network")
+
+
+class DQN(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super(DQN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2)
+        
+        # Calculate the size of the output from the second convolutional layer
+        # Assuming square input and no padding, directly use the new calculations:
+        convw = convh = 9  
+        
+        linear_input_size = convw * convh * 32  # This should now be positive and correct
+        
+        self.fc1 = nn.Linear(linear_input_size, 256)
+        self.out = nn.Linear(256, n_actions)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layer
+        x = F.relu(self.fc1(x))
+        return self.out(x)
