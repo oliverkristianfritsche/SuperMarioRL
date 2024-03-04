@@ -20,7 +20,7 @@ class GameBoyEnv(gym.Env):
     #     WindowEvent.PRESS_ARROW_LEFT, WindowEvent.RELEASE_ARROW_LEFT,
 
     time_steps = 0
-    death_scalar=0
+    death_scalar=10
     survive_scalar=20
     frame_scalar=0.000
     level_scalar=3.0
@@ -70,6 +70,8 @@ class GameBoyEnv(gym.Env):
         self.time_steps += 1
         if self.time_steps > self.max_steps:
             reward -= 1 * self.survive_scalar
+        elif done and self.time_steps < self.max_steps:
+            reward -= 1 * self.death_scalar
 
         return observation, reward, done, info
 

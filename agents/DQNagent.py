@@ -23,6 +23,7 @@ class Config:
         self.epsilon = kwargs.get('epsilon', 1)
         self.state_preprocessing_fn = kwargs.get('state_preprocessing_fn', None)
         self.update_target_every = kwargs.get('update_target_every', 30)
+        self.save_model_every = kwargs.get('save_model_every', 100)
         self.n_ticks_to_skip = kwargs.get('n_ticks_to_skip', 2)
         self.state_preprocessing_fn = kwargs.get('state_preprocessing_fn', None)
         self.epsilon_decay_rate_adjustment = kwargs.get('epsilon_decay_rate_adjustment', 1)
@@ -94,37 +95,40 @@ class DQNAgent:
 
     def plot_metrics_and_filters(self):
         clear_output(wait=True)
-        # Create a 3x2 grid layout for plots, explicitly dedicating space for the filter visualization
-        fig = plt.figure(figsize=(20, 15))  # Adjusted size to better accommodate the additional plots
+        fig = plt.figure(figsize=(20, 20))  # Increased figure size to accommodate additional plots
 
-        # Plot the first four metrics in the first 4 subplots
-        titles = ["Total Reward per Episode", "Epsilon Value Over Time", 
-                "Time Steps per Episode", "Gamma per Episode"]
-        metrics = [self.total_rewards, self.epsilons, self.total_time_steps, self.total_gammas]
-        
+        # Determine the number of complete epochs for even distribution
+        episodes_per_epoch = len(self.total_rewards) // self.epoch_counter + 1
+        total_episodes_to_consider = episodes_per_epoch * self.epoch_counter + 1
+
+        # Calculate the average for rewards and gammas per epoch
+        average_rewards_per_epoch = [sum(self.total_rewards[i:i + episodes_per_epoch]) / episodes_per_epoch for i in range(0, total_episodes_to_consider, episodes_per_epoch)]
+        average_gammas_per_epoch = [sum(self.total_gammas[i:i + episodes_per_epoch]) / episodes_per_epoch for i in range(0, total_episodes_to_consider, episodes_per_epoch)]
+
+        # Adjust titles and metrics for plotting, including per-episode data
+        titles = ["Reward per Episode", "Average Reward per Epoch", "Gamma per Episode", "Average Gamma per Epoch",
+                "Epsilon Value Over Time", "Time Steps per Episode"]
+        metrics = [self.total_rewards, average_rewards_per_epoch, self.total_gammas, average_gammas_per_epoch,
+                self.epsilons, self.total_time_steps]
+
         for i, (title, metric) in enumerate(zip(titles, metrics)):
-            ax = fig.add_subplot(3, 2, i+1)  # Positions 1 to 4 for metrics
+            ax = fig.add_subplot(4, 2, i+1)  # Adjusted for 4x2 grid layout
             ax.set_title(title)
             ax.plot(metric)
-        
+
         # Assuming the first layer of your model is a convolutional layer
         first_conv_layer = next(self.model.children())
-        
         if isinstance(first_conv_layer, torch.nn.modules.conv.Conv2d):
-            # Extract filters
             filters = first_conv_layer.weight.data.clone().cpu()
             n_filters = filters.shape[0]
-            # Determine how many filters to display (for example, the first 4 filters)
-            n_display_filters = min(n_filters, 4)
-            
-            # Create a subplot for the filters visualization, occupying the 5th position
-            filters_ax = fig.add_subplot(3, 2, 5)  # Using the entire row for filters
-            filters_ax.set_title("First Layer Filters")
-            filters_ax.axis('off')  # Hide axis for this subplot
+            n_display_filters = min(n_filters, 4)  # Display the first 4 filters
 
-            # Calculate grid size for plotting filters within this subplot
+            filters_ax = fig.add_subplot(4, 2, 7)  # Adjusted for the new layout
+            filters_ax.set_title("First Layer Filters")
+            filters_ax.axis('off')
+
             for i in range(n_display_filters):
-                inner_ax = fig.add_subplot(3, n_display_filters, i + 1 + 2*n_display_filters)  # Position filters in the last row
+                inner_ax = fig.add_subplot(4, n_display_filters, i + 1 + 3*n_display_filters)
                 filter = filters[i]
                 filter_min, filter_max = filter.min(), filter.max()
                 filter = (filter - filter_min) / (filter_max - filter_min)
@@ -173,14 +177,20 @@ class DQNAgent:
             'epsilons': self.epsilons,
             'total_time_steps': self.total_time_steps,
             'total_gammas': self.total_gammas,
-            'last_episode': episode if episode is not None else self.epoch_counter
+            'last_episode': episode,
+            'last_epoch': self.epoch_counter
         }
         torch.save(history, history_path)
 
     def load_training_history(self):
-        history_files = sorted([f for f in os.listdir(self.checkpoint_dir) if f.startswith('training_history_')], reverse=True)
-        if history_files:
-            latest_history_checkpoint = os.path.join(self.checkpoint_dir, history_files[0])
+        # List all training history files
+        history_files = [f for f in os.listdir(self.checkpoint_dir) if f.startswith('training_history_')]
+        
+        # Sort files by last modification time in descending order
+        history_files_sorted = sorted(history_files, key=lambda x: os.path.getmtime(os.path.join(self.checkpoint_dir, x)), reverse=True)
+        
+        if history_files_sorted:
+            latest_history_checkpoint = os.path.join(self.checkpoint_dir, history_files_sorted[0])
             history = torch.load(latest_history_checkpoint, map_location=self.device)
             
             self.total_rewards = history['total_rewards']
@@ -188,6 +198,7 @@ class DQNAgent:
             self.total_time_steps = history['total_time_steps']
             self.total_gammas = history['total_gammas']
             self.episode_counter = history['last_episode']
+            self.epoch_counter = history['last_epoch'] if 'last_epoch' in history else 6
             
             print(f"Loaded training history from {latest_history_checkpoint}")
         else:
@@ -236,6 +247,7 @@ class DQNAgent:
     def train(self, num_episodes, reward_discount_factor=0.95, discount_step_interval=200):
         start_episode = self.episode_counter + 1  # Assuming episode_counter is correctly initialized
         epsilon_decay_amount = (self.config.epsilon - self.config.epsilon_min) / self.config.epsilon_decay_frames
+        self.config.epsilon = self.epsilons[-1] if self.epsilons else self.config.epsilon
         total_frames = 0
 
         for episode in range(start_episode, start_episode + num_episodes):
@@ -278,10 +290,11 @@ class DQNAgent:
             self.total_gammas.append(self.temp_gamma)
 
             if episode % self.config.update_target_every == 0:  # Fixed condition to match episode interval
-                self.save_model(prefix="model", episode=episode)
-                self.save_model(prefix="target_model", episode=episode)
                 self.target_model.load_state_dict(self.model.state_dict())
-
+            
+            if episode % self.config.save_model_every == 0:  # Fixed condition to match episode interval
+                self.save_model(prefix="model",episode=episode)
+                self.save_model(prefix="target_model",episode=episode)
             self.plot_metrics_and_filters()
             print(f"Episode: {episode}, Total reward: {total_reward}, Epsilon: {self.config.epsilon}, Time Steps: {self.time_steps}, Gamma: {self.temp_gamma}")
 
