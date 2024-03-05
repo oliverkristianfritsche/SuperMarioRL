@@ -12,7 +12,7 @@ class GameBoyEnv(gym.Env):
         WindowEvent.PRESS_BUTTON_A, WindowEvent.RELEASE_BUTTON_A,
         WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_RIGHT,
         WindowEvent.PRESS_BUTTON_B, WindowEvent.RELEASE_BUTTON_B,
-        # WindowEvent.PRESS_ARROW_LEFT, WindowEvent.RELEASE_ARROW_LEFT,
+        WindowEvent.PRESS_ARROW_LEFT, WindowEvent.RELEASE_ARROW_LEFT,
     ]
     # WindowEvent.PRESS_BUTTON_A, WindowEvent.RELEASE_BUTTON_A,
     #     WindowEvent.PRESS_ARROW_RIGHT, WindowEvent.RELEASE_ARROW_RIGHT,
@@ -21,12 +21,12 @@ class GameBoyEnv(gym.Env):
 
     time_steps = 0
     death_scalar=10
-    survive_scalar=20
+    survive_scalar=0
     frame_scalar=0.000
     level_scalar=3.0
     coin_scalar=1.00
     score_scalar=.01
-    max_steps=15000
+    max_steps=10000
 
     prev_level_reward = 0
     prev_coin_reward = 0

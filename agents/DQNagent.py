@@ -8,7 +8,7 @@ import torch.optim as optim
 import numpy as np
 import random
 import os
-
+from pyboy import WindowEvent
 class Config:
     def __init__(self, env, model_function, target_model_function, **kwargs):
         self.env = env
@@ -98,8 +98,8 @@ class DQNAgent:
         fig = plt.figure(figsize=(20, 20))  # Increased figure size to accommodate additional plots
 
         # Determine the number of complete epochs for even distribution
-        episodes_per_epoch = len(self.total_rewards) // self.epoch_counter + 1
-        total_episodes_to_consider = episodes_per_epoch * self.epoch_counter + 1
+        episodes_per_epoch = len(self.total_rewards) // (self.epoch_counter + 1)
+        total_episodes_to_consider = episodes_per_epoch * (self.epoch_counter + 1)
 
         # Calculate the average for rewards and gammas per epoch
         average_rewards_per_epoch = [sum(self.total_rewards[i:i + episodes_per_epoch]) / episodes_per_epoch for i in range(0, total_episodes_to_consider, episodes_per_epoch)]
@@ -257,6 +257,12 @@ class DQNAgent:
             self.time_steps = 0
             self.temp_gamma = self.config.gamma  # Reset temp_gamma at the start of each episode
 
+            if self.config.env.action_space.n == 2: #special case for 1dof env
+                self.config.env.pyboy.send_input(WindowEvent.PRESS_ARROW_RIGHT)
+                self.config.env.pyboy.send_input(WindowEvent.PRESS_BUTTON_B)
+            if self.config.env.action_space.n == 4: #special case for 2dof env
+                self.config.env.pyboy.send_input(WindowEvent.PRESS_ARROW_RIGHT)
+
             while not done:
                 action = self.act(state)
                 next_state, reward, done, _ = self.config.env.step(action)
@@ -265,7 +271,7 @@ class DQNAgent:
                 if reward > 100:
                     continue
                 # Adjusting reward with current temp_gamma before storing in replay buffer
-                adjusted_reward = reward * self.temp_gamma
+                adjusted_reward = (reward * self.temp_gamma) + (-self.config.env.death_scalar * (1 - self.temp_gamma))
                 self.replay_buffer.push(state.transpose(2, 0, 1), action, adjusted_reward, next_state.transpose(2, 0, 1), done)
                 self.update()
                 state = next_state
