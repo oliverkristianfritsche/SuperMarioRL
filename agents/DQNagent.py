@@ -10,11 +10,12 @@ import random
 import os
 from pyboy import WindowEvent
 class Config:
-    def __init__(self, env, model_function, target_model_function, **kwargs):
+    def __init__(self,game_name, env, model_function, target_model_function, **kwargs):
+        self.game_name = game_name
         self.env = env
         self.model_function = model_function
         self.target_model_function = target_model_function
-        self.replay_buffer_size = kwargs.get('replay_buffer_size', 100000)
+        self.replay_buffer_size = kwargs.get('replay_buffer_size', 1000000)
         self.gamma = kwargs.get('gamma', 0.9999999)
         self.batch_size = kwargs.get('batch_size', 64)
         self.epsilon_decay = kwargs.get('epsilon_decay', .999)
@@ -28,6 +29,25 @@ class Config:
         self.state_preprocessing_fn = kwargs.get('state_preprocessing_fn', None)
         self.epsilon_decay_rate_adjustment = kwargs.get('epsilon_decay_rate_adjustment', 1)
         self.checkpoint_subfolder = kwargs.get('checkpoint_subfolder', '')
+
+        # Compute degrees of freedom (DoF) based on the action space of the environment
+        self.dof = env.action_space.n
+
+        hyperparameters = [
+        f"bs_{self.batch_size}",
+        f"ed_{self.epsilon_decay}",
+        f"edf_{self.epsilon_decay_frames}",
+        f"emin_{self.epsilon_min}",
+        f"gamma_{self.gamma:.8f}",
+        f"nuts_{self.n_ticks_to_skip}",
+        f"ute_{self.update_target_every}",
+        f"sme_{self.save_model_every}",
+        f"edra_{self.epsilon_decay_rate_adjustment}"
+        f"dof_{self.dof}"
+        ]
+
+        self.hyperparameters_str = "_".join(hyperparameters)
+        self.checkpoint_subfolder = f"{self.game_name}/{self.hyperparameters_str}"
 
 class DQNAgent:
     def __init__(self, config):
@@ -266,28 +286,33 @@ class DQNAgent:
             while not done:
                 action = self.act(state)
                 next_state, reward, done, _ = self.config.env.step(action)
-                self.time_steps += 1
+                self.time_steps += 1 * self.config.env.n_ticks_per_step
                 total_frames += 1
                 if reward > 100:
                     continue
                 # Adjusting reward with current temp_gamma before storing in replay buffer
-                adjusted_reward = (reward * self.temp_gamma) + (-self.config.env.death_scalar * (1 - self.temp_gamma))
+                adjusted_reward = reward * self.temp_gamma 
+                if done:adjusted_reward+=(-self.config.env.death_scalar * (1 - self.temp_gamma))
+
                 self.replay_buffer.push(state.transpose(2, 0, 1), action, adjusted_reward, next_state.transpose(2, 0, 1), done)
                 self.update()
                 state = next_state
 
                 
-                total_reward += reward
+                total_reward += adjusted_reward
 
                 # Apply reward discount factor adjustment every 'discount_step_interval' steps
                 if self.time_steps % discount_step_interval == 0:
-                    self.temp_gamma *= reward_discount_factor
+                    self.temp_gamma = max(.1, self.temp_gamma * reward_discount_factor)
 
                 # Epsilon decay logic should be based on total_frames, not self.time_steps
                 if total_frames <= self.config.epsilon_decay_frames:
                     self.config.epsilon = max(self.config.epsilon_min, self.config.epsilon - epsilon_decay_amount)
                 else:
                     self.config.epsilon = self.config.epsilon_min
+
+                for _ in range(self.config.n_ticks_to_skip):
+                    self.config.env.pyboy.tick()
 
             # Log and save metrics after each episode
             self.total_rewards.append(total_reward)
