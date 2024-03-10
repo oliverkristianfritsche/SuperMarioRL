@@ -72,14 +72,15 @@ class MarioGameBoyEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array']}
     n_ticks_per_step = 3
     max_steps = 10000
-    death_scalar = 3
+    death_scalar = 15
     survive_scalar = 0
     frame_scalar = 0.000
-    level_scalar = 3.0
+    level_scalar = 0.0
     coin_scalar = 1.00
     score_scalar = .01
-    go_right_scalar = 0.1
-    go_left_scalar = -0.1
+    go_right_scalar = 0.05
+    go_left_scalar = -0.01
+    reward_scalar=0.01
 
     prev_level_reward = 0
     prev_coin_reward = 0
@@ -87,20 +88,27 @@ class MarioGameBoyEnv(gym.Env):
 
     # Define Mario-specific Game Boy buttons
     gameboy_buttons = [
-        WindowEvent.PRESS_BUTTON_A,
-        WindowEvent.PRESS_BUTTON_B,
-        WindowEvent.PRESS_ARROW_RIGHT,
-        WindowEvent.PRESS_ARROW_LEFT,
+        # [WindowEvent.PRESS_BUTTON_A],
+        # [WindowEvent.PRESS_BUTTON_B],
+        # [WindowEvent.PRESS_ARROW_RIGHT],
+        # [WindowEvent.PRESS_ARROW_RIGHT,WindowEvent.PRESS_BUTTON_A],
+        [WindowEvent.PRESS_ARROW_RIGHT,WindowEvent.PRESS_BUTTON_B],
+        [WindowEvent.PRESS_ARROW_RIGHT,WindowEvent.PRESS_BUTTON_A,WindowEvent.PRESS_BUTTON_B,],
+    
+        # [WindowEvent.PRESS_ARROW_LEFT],
         # WindowEvent.PRESS_ARROW_UP,
         # WindowEvent.PRESS_ARROW_DOWN,
         # WindowEvent.PRESS_BUTTON_START,
         # WindowEvent.PRESS_BUTTON_SELECT
     ]
     gameboy_buttons_release = [
-        WindowEvent.RELEASE_BUTTON_A,
-        WindowEvent.RELEASE_BUTTON_B,
-        WindowEvent.RELEASE_ARROW_RIGHT,
-        WindowEvent.RELEASE_ARROW_LEFT,
+        # [WindowEvent.RELEASE_BUTTON_A],
+        # [WindowEvent.RELEASE_BUTTON_B],
+        # [WindowEvent.RELEASE_ARROW_RIGHT],
+        # [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_A],
+        [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_B],
+        [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_A,WindowEvent.RELEASE_BUTTON_B],
+        # [WindowEvent.RELEASE_ARROW_LEFT],
         # WindowEvent.RELEASE_ARROW_UP,
         # WindowEvent.RELEASE_ARROW_DOWN,
         # WindowEvent.RELEASE_BUTTON_START,
@@ -118,6 +126,7 @@ class MarioGameBoyEnv(gym.Env):
         self.observation_space = spaces.Box(low=0, high=255, shape=(*self.observation_shape, 3), dtype=np.uint8)
         self.unique_frames = FrameStorage()
         print(f"Observation shape: {self.observation_shape}")
+        self.last_action = None
 
     def initialize_game(self):
         self.pyboy.set_emulation_speed(0)
@@ -130,36 +139,51 @@ class MarioGameBoyEnv(gym.Env):
             self.pyboy.save_state(open(state_path, "wb"))
 
     def step(self, action):
-        if action < len(self.gameboy_buttons):
-            self.pyboy.send_input(self.gameboy_buttons[action])
-        self.pyboy.tick()
+        if self.last_action is not None and action != self.last_action:
+            for i in range(len(self.gameboy_buttons_release[self.last_action])):
+                self.pyboy.send_input(self.gameboy_buttons_release[self.last_action][i])
+        
+        for i in range(len(self.gameboy_buttons[action])):
+            self.pyboy.send_input(self.gameboy_buttons[action][i])
+        
         for _ in range(self.n_ticks_per_step):
             self.time_steps += 1
             self.pyboy.tick()
-        
-        self.pyboy.send_input(self.gameboy_buttons_release[action])
-        observation = self.pyboy.botsupport_manager().screen().screen_ndarray()
-        observation = cv2.resize(observation, self.observation_shape, interpolation=cv2.INTER_AREA)
-
         done = self.check_game_over()
-        reward, info = self.calculate_reward(observation, done)
-        self.time_steps += 1
-        if self.time_steps > self.max_steps:
-            reward -= 1 * self.survive_scalar
-        elif done and self.time_steps < self.max_steps:
-            reward -= 1 * self.death_scalar
-
-        if(self.gameboy_buttons[action]==WindowEvent.PRESS_ARROW_RIGHT):
-            reward += self.go_right_scalar
-        elif(self.gameboy_buttons[action]==WindowEvent.PRESS_ARROW_LEFT):
-            reward += self.go_left_scalar
-
+        reward, info = self.calculate_reward(done)
+        observation = self.pyboy.botsupport_manager().screen().screen_ndarray()
         
-        # self.render()
+        #crop top 32 pixels
+        observation = observation[32:,:,:].copy()
+        observation = cv2.resize(observation, self.observation_shape, interpolation=cv2.INTER_AREA)
+   
+        self.last_action = action
 
         return observation, reward, done, info
+    
+    def calculate_reward(self,done):
 
-    def calculate_reward(self, observation, done):
+        instant_velocity_abs = min(self.pyboy.get_memory_value(0xC20C),self.death_scalar)
+        direction = self.pyboy.get_memory_value(0xC20D)
+        instant_velocity= instant_velocity_abs
+        if direction == 32:
+            instant_velocity *= -1
+        elif direction == 0:
+            instant_velocity = 0
+
+        reward = instant_velocity - self.n_ticks_per_step #penalize for not moving
+        if done:
+            reward -= self.death_scalar
+
+        # print(reward,instant_velocity,direction)
+
+        #clip reward [-15,15]
+        reward = max(-15,min(15,reward))
+
+        return reward*self.reward_scalar, {}
+        
+
+    def calculate_reward_old(self, observation, done):
         current_level_reward = self.get_level_reward()
         current_coin_reward = self.get_coin_reward()
         current_score_reward = self.get_score_reward()

@@ -2,7 +2,10 @@ from collections import deque
 import numpy as np
 import random
 import torch
-
+import pickle
+import glob
+import os
+from math import ceil
 class ReplayBuffer:
     def __init__(self, capacity):
         self.buffer = deque(maxlen=capacity)
@@ -13,7 +16,30 @@ class ReplayBuffer:
     def sample(self, batch_size):
         state, action, reward, next_state, done = zip(*random.sample(self.buffer, batch_size))
         return np.array(state), action, reward, np.array(next_state), done
-    
+
+    def save(self, folderpath, chunk_size=1000):
+        """Save the replay buffer to multiple files in chunks."""
+        total_items = len(self.buffer)
+        num_chunks = ceil(total_items / chunk_size)
+        
+        for i in range(num_chunks):
+            chunk = list(self.buffer[i*chunk_size:(i+1)*chunk_size])
+            filename = os.path.joing(folderpath,f"chunk_{i}.pkl")
+            with open(filename, 'wb') as file:
+                pickle.dump(chunk, file)
+
+    def load(self, folderpath):
+        """Load the replay buffer from multiple chunk files."""
+        chunk_files = glob.glob(os.path.join(folderpath, 'chunk_*.pkl'))
+        buffer = []
+        
+        for chunk_file in chunk_files:
+            with open(chunk_file, 'rb') as file:
+                chunk = pickle.load(file)
+                buffer.extend(chunk)
+        
+        self.buffer = deque(buffer, maxlen=self.buffer.maxlen)
+
     def clear(self):
         self.buffer.clear()
 

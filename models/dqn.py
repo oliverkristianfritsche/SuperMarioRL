@@ -56,7 +56,7 @@ class EncoderWithHead(Autoencoder):
 class DQN(nn.Module):
     def __init__(self, input_shape, n_actions):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=8, stride=4)
+        self.conv1 = nn.Conv2d(in_channels=input_shape[2], out_channels=16, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2)
         
         # Calculate the size of the output from the second convolutional layer
@@ -74,3 +74,26 @@ class DQN(nn.Module):
         x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layer
         x = F.relu(self.fc1(x))
         return self.out(x)
+    
+class DQN2(nn.Module):
+    def __init__(self, input_shape, n_actions):
+        super(DQN2, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=input_shape[2], out_channels=16, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1)
+
+        convw = convh = 7  # Adjust this based on your specific input shape and conv layer parameters
+
+        linear_input_size = convw * convh * 64  # This should now be positive and correct
+
+        self.fc1 = nn.Linear(linear_input_size, 256)
+        self.out = nn.Linear(256, n_actions)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.view(x.size(0), -1)  # Flatten the output for the fully connected layer
+        x = F.relu(self.fc1(x))
+        return self.out(x)
+
