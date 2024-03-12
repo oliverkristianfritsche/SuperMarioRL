@@ -95,7 +95,7 @@ class MarioGameBoyEnv(gym.Env):
         [WindowEvent.PRESS_ARROW_RIGHT,WindowEvent.PRESS_BUTTON_B],
         [WindowEvent.PRESS_ARROW_RIGHT,WindowEvent.PRESS_BUTTON_A,WindowEvent.PRESS_BUTTON_B,],
     
-        # [WindowEvent.PRESS_ARROW_LEFT],
+        [WindowEvent.PRESS_ARROW_LEFT],
         # WindowEvent.PRESS_ARROW_UP,
         # WindowEvent.PRESS_ARROW_DOWN,
         # WindowEvent.PRESS_BUTTON_START,
@@ -108,7 +108,7 @@ class MarioGameBoyEnv(gym.Env):
         # [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_A],
         [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_B],
         [WindowEvent.RELEASE_ARROW_RIGHT,WindowEvent.RELEASE_BUTTON_A,WindowEvent.RELEASE_BUTTON_B],
-        # [WindowEvent.RELEASE_ARROW_LEFT],
+        [WindowEvent.RELEASE_ARROW_LEFT],
         # WindowEvent.RELEASE_ARROW_UP,
         # WindowEvent.RELEASE_ARROW_DOWN,
         # WindowEvent.RELEASE_BUTTON_START,

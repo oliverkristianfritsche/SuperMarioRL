@@ -293,6 +293,7 @@ class DQNAgent:
 
         self.minibatch_update_count += 1
         if self.minibatch_update_count % 50000 == 0:
+            self.scheduler.step()
             self.epoch_counter += 1
             # self.target_model.load_state_dict(self.model.state_dict())
             torch.save(self.model.state_dict(), os.path.join(self.checkpoint_dir, f"model_epoch_{self.epoch_counter}.pth"))
